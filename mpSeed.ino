@@ -14,8 +14,7 @@ HardwareSerial hwSerial(1, 2);  // Arduino Nano handles PN532 reads and reports 
 
 
 #define PIN 0
-// ATtiny1616 drives neopixels, talks to Seed over i2c
-seesaw_NeoPixel strip = seesaw_NeoPixel(36, PIN, NEO_GRB + NEO_KHZ800);
+seesaw_NeoPixel strip = seesaw_NeoPixel(36, PIN, NEO_GRB + NEO_KHZ800);  // ATtiny1616 drives neopixels, talks to Seed over i2c
 
 
 
@@ -23,11 +22,11 @@ seesaw_NeoPixel strip = seesaw_NeoPixel(36, PIN, NEO_GRB + NEO_KHZ800);
 
 
 // temporary joystick calibration constants
-#define HALFSTEPZEROPOINT 545
-#define HALFSTEPLOWPOINT 670
-#define HALFSTEPHIGHPOINT 410
+#define HALFSTEPZEROPOINT 512
+#define HALFSTEPLOWPOINT 630
+#define HALFSTEPHIGHPOINT 365
 
-#define OCTAVEZEROPOINT 475
+#define OCTAVEZEROPOINT 489
 #define OCTAVELOWPOINT 600
 #define OCTAVEHIGHPOINT 340
 
@@ -423,24 +422,25 @@ int zoneReading[9] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int lastZoneReading[9] = {};
 
 
-// divided by 30
+
 int colorBase[8][3] = {
-  { 0, 8, 0 },
-  { 3, 8, 0 },
-  { 8, 8, 0 },
-  { 8, 0, 0 },
-  { 6, 0, 8 },
-  { 0, 2, 8 },
-  { 0, 8, 8 },
-  { 8, 8, 8 },
+  { 0, 4, 0 },  // red
+  { 1, 4, 0 },  // orange
+  { 4, 4, 0 },  // yellow
+  { 4, 0, 0 },  // green
+  { 3, 0, 4 },  // blue
+  { 0, 1, 4 },  // indigo
+  { 0, 4, 4 },  // violet
+  { 4, 4, 4 },  // white
 };
+
 
 int buttonPin = D26;
 int ledPin = D27;
 int irRxPin = D7;
 int irTxPin = D14;
 int hallPin = D3;
-int octaveJoystickSelectPin = D6;
+int octaveJoystickSelectPin = D8;  //D6
 
 bool lastArpActiveState = false;
 bool arpActiveState = false;
@@ -472,6 +472,7 @@ int activeThreshold = 30;
 float octaveMultiplier = 1.0;
 
 bool chordActive[NUMCHORDS] = { false, false, false, false, false, false, false, false };
+
 bool lastChordActive[NUMCHORDS] = { false, false, false, false, false, false, false, false };
 
 int lastNumActive = 1;  // initialize as 1 so that we check NFC on first loop
@@ -528,9 +529,6 @@ float octaveModifier = 1.0;
 float upMappedOctaveJoystickReadingFloat;
 float downMappedOctaveJoystickReadingFloat;
 
-float looperInput = 0.0;
-float looperOutput = 0.0;
-
 int pixelMappedZoneReading[NUMZONES] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int pixelZoneReading[NUMZONES] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 int lastPixelMappedZoneReading[NUMZONES] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -577,16 +575,12 @@ unsigned long lastPixelOnTime[32];
 
 int smoothedZoneReading[NUMZONES] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
+int pixelZoneReadingDifference[NUMCHORDS] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 
 #define NUMARPRIPPLESTEPS 8
 int lastArpRippleModIndex = 0;
 int arpRippleModIndex = 0;
-// float arpRippleModifier[8] = { 0.75, 0.875, 1.0, 0.875, 0.75, 0.625, 0.5, 0.625 };
-// float arpRippleModifier[2][NUMARPRIPPLESTEPS]{
-//   { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 },
-//   { 0.5, 0.75, 1.0, 0.75, 0.5, 0.25, 0.0, 0.25 },
-// };
 
 //TEMPORARY BYPASS
 float arpRippleModifier[2][NUMARPRIPPLESTEPS]{
@@ -595,21 +589,18 @@ float arpRippleModifier[2][NUMARPRIPPLESTEPS]{
 };
 
 
+
+
 //MELODY MODE
-// Somewhere Over the Rainbow
-// Ode to Joy
-// The Way You Look Tonight
-// Swan Lake
-// You Are My Sunshine
 
 int numSequenceSteps[5] = { 23, 39, 33, 16, 46 };
 
 int melodyNote[5][48]{
-  { 0, 7, 6, 4, 5, 6, 7, 0, 5, 4, 5, 3, 2, 0, 1, 2, 3, 1, 6, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 2, 9, 2, 3, 4, 9, 4, 3, 2, 1, 0, 9, 0, 1, 2, 9, 2, 1, 9, 1, 2, 9, 2, 3, 4, 9, 4, 3, 2, 1, 0, 9, 0, 1, 2, 1, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 4, 9, 4, 9, 4, 0, 1, 2, 3, 2, 1, 2, 3, 4, 3, 2, 3, 4, 5, 4, 3, 4, 5, 6, 7, 0, 1, 2, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 5, 1, 2, 3, 4, 5, 3, 5, 3, 5, 1, 3, 1, 5, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-  { 0, 9, 0, 1, 2, 9, 2, 9, 2, 1, 2, 0, 9, 0, 9, 0, 1, 2, 3, 5, 9, 5, 4, 3, 2, 0, 1, 2, 3, 5, 9, 5, 4, 3, 2, 0, 9, 0, 1, 2, 3, 1, 9, 1, 2, 0, 0, 0 },
+  { 0, 7, 6, 4, 5, 6, 7, 0, 5, 4, 5, 3, 2, 0, 1, 2, 3, 1, 6, 0, 1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },  // Somewhere Over the Rainbow
+  { 2, 9, 2, 3, 4, 9, 4, 3, 2, 1, 0, 9, 0, 1, 2, 9, 2, 1, 9, 1, 2, 9, 2, 3, 4, 9, 4, 3, 2, 1, 0, 9, 0, 1, 2, 1, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },  // Ode to Joy
+  { 4, 9, 4, 9, 4, 0, 1, 2, 3, 2, 1, 2, 3, 4, 3, 2, 3, 4, 5, 4, 3, 4, 5, 6, 7, 0, 1, 2, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },  // The Way You Look Tonight
+  { 5, 1, 2, 3, 4, 5, 3, 5, 3, 5, 1, 3, 1, 5, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },  // Swan Lake
+  { 0, 9, 0, 1, 2, 9, 2, 9, 2, 1, 2, 0, 9, 0, 9, 0, 1, 2, 3, 5, 9, 5, 4, 3, 2, 0, 1, 2, 3, 5, 9, 5, 4, 3, 2, 0, 9, 0, 1, 2, 3, 1, 9, 1, 2, 0, 0, 0 },  // You Are My Sunshine
 };
 
 
@@ -632,6 +623,8 @@ int melodyNoteAccidentalModifier[5][48]{
 
 
 
+
+
 bool tickProcess;
 
 void resetBuffer();
@@ -639,6 +632,11 @@ void resetBuffer();
 void looperProcess(float &looperOutput, float *looperInput, size_t i);
 
 
+
+
+
+
+// AUTO-ACCOMPANIST
 
 int aaStepDuration = 110;
 int aanNumChords = 2;
@@ -662,11 +660,25 @@ bool aaDrumSequenceStep[3][64]{
 };
 
 
-
 int aaQuarterSequenceStep[32] = { 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124 };
 int aaSixteenthOneSequenceStep[32] = { 1, 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121, 125 };
 int aaEighthSequenceStep[32] = { 2, 6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62, 66, 70, 74, 78, 82, 86, 90, 94, 98, 102, 106, 110, 114, 118, 122, 126 };
 int aaSixteenthTwoSequenceStep[32] = { 3, 7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103, 107, 111, 115, 119, 123, 127 };
+
+
+
+
+
+
+
+int halfStepJoystickReading = 0;
+
+int octaveJoystickReading = 0;
+
+bool buttonDisabled = false;
+
+
+
 
 
 
@@ -717,7 +729,7 @@ void setup() {
 
 
 
-  //AA VOICES
+  //AUTO-ACCOMPANIST VOICES
   for (int i = 0; i < 3; i++) {
     aaVoiceOscillator[i]->Init(samplerate);
     aaVoiceEnvelope[i]->Init(samplerate);
@@ -802,14 +814,14 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(irRxPin, INPUT_PULLUP);
   pinMode(irTxPin, OUTPUT);
-  pinMode(hallPin, INPUT);
+  pinMode(hallPin, INPUT_PULLUP);
   pinMode(octaveJoystickSelectPin, INPUT_PULLUP);
   digitalWrite(irTxPin, LOW);
 
 
   updatePatch();
 
-  DAISY.SetAudioBlockSize(48);
+  DAISY.SetAudioBlockSize(64);
 
   DAISY.begin(MyCallback);
 
@@ -825,6 +837,10 @@ void setup() {
   for (int i = 0; i < 32; i++) {
     lastPixelOnTime[i] = 0;
   }
+
+  keyModifier = 0;
+
+  buttonDisabled = false;
 
   rainbowChaseSlow();
 }
@@ -882,17 +898,20 @@ void MyCallback(float **in, float **out, size_t size) {
   float finalOutput = 0.0;
 
 
+  // prevent clicks from fast attack / release of FSRs
   for (int j = 0; j < 8; j++) {
-
-    if (smoothedZoneReading[j] > zoneReading[j] + 0) {
-      smoothedZoneReading[j] = smoothedZoneReading[j] - 1;
-    } else if (smoothedZoneReading[j] < zoneReading[j] - 0) {
-      smoothedZoneReading[j] = smoothedZoneReading[j] + 1;
+    if (smoothedZoneReading[j] > zoneReading[j] + 5) {
+      smoothedZoneReading[j] = smoothedZoneReading[j] - 5;
+    } else if (smoothedZoneReading[j] < zoneReading[j] - 5) {
+      smoothedZoneReading[j] = smoothedZoneReading[j] + 5;
     } else {
       smoothedZoneReading[j] = zoneReading[j];
     }
-    mainVoiceLevelModifier[j] = smoothedZoneReading[j] / 1023.0;
+    smoothedZoneReading[j] = smoothedZoneReading[j] * 1.0;
+    smoothedZoneReading[j] = constrain(smoothedZoneReading[j], 0, 600);
+    mainVoiceLevelModifier[j] = (smoothedZoneReading[j] / 1023.0) * 1.2;
   }
+
 
 
   for (size_t i = 0; i < size; i++) {
@@ -900,7 +919,7 @@ void MyCallback(float **in, float **out, size_t size) {
     tickProcess = tick.Process();
 
     if (currentPatch == 0) {  // DEFAULT
-      // only process every third voice
+      // only process every third voice for now
       for (int j = 0; j < NUMCHORDS; j++) {
         mainVoiceEnvProcess[(j * NUMVOICESPERCHORD)] = mainVoiceEnvelope[(j * NUMVOICESPERCHORD) + 9]->Process(mainVoiceGate[j * NUMVOICESPERCHORD]);
         mainVoiceOscProcess[j * NUMVOICESPERCHORD] = mainVoiceOscillator[j * NUMVOICESPERCHORD]->Process();
@@ -911,12 +930,12 @@ void MyCallback(float **in, float **out, size_t size) {
       for (int j = 0; j < NUMCHORDS; j++) {
         sumMainVoices = sumMainVoices + mainVoiceOutput[j * NUMVOICESPERCHORD];
       }
-      // only process 3 arp voices
+      // only process 3 arp voices for now
       for (int j = 0; j < 3; j++) {
         arpVoiceEnvProcess[j] = arpVoiceEnvelope[j]->Process(arpVoiceGate[j]);
         arpVoiceOscProcess[j] = arpVoiceOscillator[j]->Process();
         // arpVoiceFilterProcess[j] = arpVoiceFilter[j]->Process(arpVoiceOscProcess[j]);
-        arpVoiceFilterProcess[j] = arpVoiceOscProcess[j];
+        arpVoiceFilterProcess[j] = arpVoiceOscProcess[j];  // temporarily byspass arp filter
         arpVoiceOutput[j] = arpVoiceFilterProcess[j] * arpVoiceLevelModifier[j];
       }
       sumArpVoices = 0;
@@ -928,14 +947,14 @@ void MyCallback(float **in, float **out, size_t size) {
 
       sumArpVoices = arpVoiceFilter.Low();
 
-      looperInput = sumMainVoices + sumArpVoices;
+      looperInput = sumMainVoices + (sumArpVoices * 0.5);
     }
 
 
 
 
-    else if (currentPatch == 4) {  //SMOOTH
-      // only process every third voice
+    else if (currentPatch == 1) {  //SMOOTH
+      // only process every third voice for now
       for (int j = 0; j < NUMCHORDS; j++) {
         mainVoiceEnvProcess[j * NUMVOICESPERCHORD] = mainVoiceEnvelope[j * NUMVOICESPERCHORD]->Process(mainVoiceGate[j * NUMVOICESPERCHORD]);
         mainVoiceOscProcess[j * NUMVOICESPERCHORD] = mainVoiceOscillator[j * NUMVOICESPERCHORD]->Process();
@@ -946,7 +965,7 @@ void MyCallback(float **in, float **out, size_t size) {
       for (int j = 0; j < NUMCHORDS; j++) {
         sumMainVoices = sumMainVoices + mainVoiceOutput[j * NUMVOICESPERCHORD];
       }
-      // only process 1 arp voices
+      // only process 1 arp voice for now
       for (int j = 0; j < 1; j++) {
         arpVoiceEnvProcess[j] = arpVoiceEnvelope[j]->Process(arpVoiceGate[j]);
         arpVoiceOscProcess[j] = arpVoiceOscillator[j]->Process();
@@ -971,7 +990,7 @@ void MyCallback(float **in, float **out, size_t size) {
 
 
     } else if (currentPatch == 3) {  // WAVY
-      // only process every third voice
+      // only process every third voice for now
       for (int j = 0; j < NUMCHORDS; j++) {
         mainVoiceEnvProcess[j * NUMVOICESPERCHORD] = mainVoiceEnvelope[j * NUMVOICESPERCHORD]->Process(mainVoiceGate[j * NUMVOICESPERCHORD]);
         mainVoiceOscProcess[j * NUMVOICESPERCHORD] = mainVoiceOscillator[j * NUMVOICESPERCHORD]->Process();
@@ -984,7 +1003,7 @@ void MyCallback(float **in, float **out, size_t size) {
       }
       sumMainVoices = mainVoiceTremolo[0]->Process(sumMainVoices);
 
-      // only process 3 arp voices
+      // only process 3 arp voices for now
       for (int j = 0; j < 3; j++) {
         arpVoiceEnvProcess[j] = arpVoiceEnvelope[j]->Process(arpVoiceGate[j]);
         arpVoiceOscProcess[j] = arpVoiceOscillator[j]->Process();
@@ -1008,7 +1027,7 @@ void MyCallback(float **in, float **out, size_t size) {
 
 
     } else if (currentPatch == 2) {  // ROUGH
-      // only process every third voice
+      // only process every third voice for now
       for (int j = 0; j < NUMCHORDS; j++) {
         mainVoiceEnvProcess[j * NUMVOICESPERCHORD] = mainVoiceEnvelope[j * NUMVOICESPERCHORD]->Process(mainVoiceGate[j * NUMVOICESPERCHORD]);
         mainVoiceOscProcess[j * NUMVOICESPERCHORD] = mainVoiceOscillator[j * NUMVOICESPERCHORD]->Process();
@@ -1021,7 +1040,7 @@ void MyCallback(float **in, float **out, size_t size) {
       }
 
 
-      // only process 3 arp voices
+      // only process 3 arp voices for now
       for (int j = 0; j < 3; j++) {
         arpVoiceEnvProcess[j] = arpVoiceEnvelope[j]->Process(arpVoiceGate[j]);
         arpVoiceOscProcess[j] = arpVoiceOscillator[j]->Process();
@@ -1047,7 +1066,6 @@ void MyCallback(float **in, float **out, size_t size) {
 
     // AUTO-ACCOMPANIST
     if (aaState == true) {
-
       // AA #nofilter
       for (int j = 0; j < 3; j++) {
         aaVoiceEnvProcess[j] = aaVoiceEnvelope[j]->Process(aaVoiceGate[j]);
@@ -1087,7 +1105,7 @@ void MyCallback(float **in, float **out, size_t size) {
 
 
       if (tickProcess) {
-
+        // for now, all voices are held until next chord change
         for (int i = 0; i < 3; i++) {
           aaVoiceGate[i] = 1;
           if (aaVoiceNote[i][currentAaSequenceStep] == 100) {
@@ -1112,16 +1130,19 @@ void MyCallback(float **in, float **out, size_t size) {
       }
     }
 
-    sumAaDrums = (kickOutput * 0.3) + (snareOutput * 0.03) + (hihatOutput * 0.03);
+    sumAaDrums = (kickOutput * 0.2) + (snareOutput * 0.03) + (hihatOutput * 0.03);
 
     looperProcess(looperOutput, looperInput, i);
 
-    finalOutput = (looperOutput * 2.0) + sumAaVoices + sumAaDrums;
+    finalOutput = (looperOutput * 1.0) + (sumAaVoices * 1.1) + (sumAaDrums * 1.2);
 
+    // Stereo output
+    // for (size_t chn = 0; chn < num_channels; chn++) {
+    //   out[chn][i] = finalOutput * 2.5;
+    // }
 
-    for (size_t chn = 0; chn < num_channels; chn++) {
-      out[chn][i] = finalOutput;
-    }
+    // Mono output
+    out[0][i] = finalOutput * 2.5;
   }
 }
 
@@ -1146,18 +1167,18 @@ void loop() {
 
     if (nanoRead == 201) {  // read request recieved
       if ((numActive == 0 && millis() > lastOffTime + nfcWaitInterval) || newPadPlaced == true) {
-        analogReadEnabled = false;
-        hwSerial.write(1);  // approve
+        analogReadEnabled = false;  // disable FSRs + joysticks while NFC is reading
+        hwSerial.write(1);          // approve
         newPadPlaced = false;
       } else {
-        hwSerial.write(0);  // deny
+        hwSerial.write(0);  // deny because zones are active, and an NFC read will cause noise on the FSRs
       }
     }
 
 
     else if (nanoRead == 202) {  // nano is finished reading and didnt find anything
-      if (currentPatch != 0) {   // we still have a texture pad loaded, even though no tag has been read
-        currentPatch = 0;
+      if (currentPatch != 0) {   // we still have a texture patch loaded, even though no tag has been read
+        currentPatch = 0;        // back to default
         rainbowChaseFast();
         updatePatch();
       }
@@ -1170,7 +1191,7 @@ void loop() {
       lastPatch = currentPatch;
       lastKeyModifier = keyModifier;
 
-      // key card parameter types are stored in different blocks, as defined below
+      // key card parameter types are stored in different ranges, as defined below
       if (nanoRead >= 64 && nanoRead <= 76) {
         keyModifier = nanoRead - 64;
       } else if (nanoRead >= 77 && nanoRead <= 89) {
@@ -1187,6 +1208,9 @@ void loop() {
         lastAaState = aaState;
         rainbowChaseFast();
         aaState = !aaState;
+      } else if (nanoRead == 2) {
+        buttonDisabled = true;
+        rainbowChaseFast();
       }
 
       if (currentPatch != lastPatch) {
@@ -1197,7 +1221,7 @@ void loop() {
         rainbowChaseFast();
       }
 
-      analogReadEnabled = true;  // enable analogRead
+      analogReadEnabled = true;  // enable FSR + joystick readings
     }
   }
 
@@ -1219,8 +1243,9 @@ void loop() {
   //ANALOG READS
   if (analogReadEnabled == true) {
 
+
     //SEMITONE JOYSTICK
-    int halfStepJoystickReading = analogRead(A9);
+    halfStepJoystickReading = analogRead(A9);
 
     int upMappedHalfStepJoystickReading = map(halfStepJoystickReading, HALFSTEPZEROPOINT, HALFSTEPHIGHPOINT, 1000, 1059);
     upMappedHalfStepJoystickReading = constrain(upMappedHalfStepJoystickReading, 1000, 1059);
@@ -1236,8 +1261,10 @@ void loop() {
     if (halfStepJoystickReading > (HALFSTEPZEROPOINT + 15)) {
       halfStepModifier = downMappedHalfStepJoystickReadingFloat;
       if (halfStepPixelMultiplier != lastHalfStepPixelMultiplier) {
-        strip.setPixelColor(34, (8 * halfStepPixelMultiplier), (8 * halfStepPixelMultiplier), (8 * halfStepPixelMultiplier));
-        strip.setPixelColor(35, 0, 0, 0);
+        int hue = map(downMappedHalfStepJoystickReading, 944, 1000, 0, 255);
+        uint32_t color = Wheel(hue);
+        strip.setPixelColor(35, color);
+        strip.setPixelColor(34, 0, 0, 0);
         if (lightsActive) {
           strip.show();
         }
@@ -1246,20 +1273,20 @@ void loop() {
     } else if (halfStepJoystickReading < (HALFSTEPZEROPOINT - 15)) {
       halfStepModifier = upMappedHalfStepJoystickReadingFloat;
       if (halfStepPixelMultiplier != lastHalfStepPixelMultiplier) {
-        if (numActive != 0) {
-          strip.setPixelColor(35, (8 * halfStepPixelMultiplier), (8 * halfStepPixelMultiplier), (8 * halfStepPixelMultiplier));
-          strip.setPixelColor(34, 0, 0, 0);
-          if (lightsActive) {
-            strip.show();
-          }
+        int hue = map(upMappedHalfStepJoystickReading, 1000, 1059, 0, 255);
+        uint32_t color = Wheel(hue);
+        strip.setPixelColor(34, color);
+        strip.setPixelColor(35, 0, 0, 0);
+        if (lightsActive) {
+          strip.show();
         }
       }
       halfStepPixelReset = false;
     } else {
       halfStepModifier = 1.0;
       if (halfStepPixelReset == false) {
-        strip.setPixelColor(34, 0, 0, 0);
         strip.setPixelColor(35, 0, 0, 0);
+        strip.setPixelColor(34, 0, 0, 0);
         if (lightsActive) {
           strip.show();
         }
@@ -1275,7 +1302,7 @@ void loop() {
     lastOctaveJoystickSelectState = octaveJoystickSelectState;
     octaveJoystickSelectState = digitalRead(octaveJoystickSelectPin);
 
-    int octaveJoystickReading = analogRead(A10);
+    octaveJoystickReading = analogRead(A10);
 
     int upMappedOctaveJoystickReading = map(octaveJoystickReading, OCTAVEZEROPOINT, OCTAVEHIGHPOINT, 1000, 2000);
     upMappedOctaveJoystickReading = constrain(upMappedOctaveJoystickReading, 1000, 2000);
@@ -1291,7 +1318,9 @@ void loop() {
     if (octaveJoystickReading > (OCTAVEZEROPOINT + 20)) {
       octaveModifier = downMappedOctaveJoystickReadingFloat;
       if (octavePixelMultiplier != lastOctavePixelMultiplier && octaveLocked == false) {
-        strip.setPixelColor(32, (8 * octavePixelMultiplier), (8 * octavePixelMultiplier), (8 * octavePixelMultiplier));
+        int hue = map(downMappedOctaveJoystickReading, 500, 1000, 0, 255);
+        uint32_t color = Wheel(hue);
+        strip.setPixelColor(32, color);
         strip.setPixelColor(33, 0, 0, 0);
 
         if (lightsActive) {
@@ -1311,7 +1340,9 @@ void loop() {
     } else if (octaveJoystickReading < (OCTAVEZEROPOINT - 20)) {
       octaveModifier = upMappedOctaveJoystickReadingFloat;
       if (octavePixelMultiplier != lastOctavePixelMultiplier && octaveLocked == false) {
-        strip.setPixelColor(33, (8 * octavePixelMultiplier), (8 * octavePixelMultiplier), (8 * octavePixelMultiplier));
+        int hue = map(upMappedOctaveJoystickReading, 1000, 2000, 0, 255);
+        uint32_t color = Wheel(hue);
+        strip.setPixelColor(33, color);
         strip.setPixelColor(32, 0, 0, 0);
         if (lightsActive) {
           strip.show();
@@ -1401,12 +1432,11 @@ void loop() {
 
 
 
-    activeThreshold = 25;
-
+    activeThreshold = 15;
 
     lastArpActiveState = arpActiveState;
 
-    if (zoneReading[8] > 150) {  // middle zone has higher threshold than other zones
+    if (zoneReading[8] > 200) {  // middle zone has higher threshold than other zones
       arpActiveState = true;
     } else {
       arpActiveState = false;
@@ -1465,7 +1495,7 @@ void loop() {
   float mainVoiceFilterCutoff[NUMMAINVOICES];
 
   for (int i = 0; i < NUMCHORDS; i++) {
-    mainVoiceFilterCutoff[i] = (zoneReading[i] * 10) + 500;
+    mainVoiceFilterCutoff[i] = (zoneReading[i] * 20) + 200;
   }
 
   if (currentPatch == 4) {
@@ -1498,6 +1528,9 @@ void loop() {
   }
 
 
+
+
+
   int sumZoneReadings = 0;
   for (int i = 0; i < NUMCHORDS; i++) {
     sumZoneReadings = sumZoneReadings + zoneReading[i];
@@ -1527,11 +1560,6 @@ void loop() {
 
 
 
-
-
-
-
-
   // ARP VOICES
   int arpStepDuration = map(zoneReading[8], 100, 1024, 150, 30);
   arpStepDuration = constrain(arpStepDuration, 10, 150);
@@ -1541,11 +1569,11 @@ void loop() {
 
     for (int i = 0; i < NUMCHORDS; i++) {
       lastArpScaleStep[i] = currentArpScaleStep[i];
-      currentArpScaleStep[i] = lastArpScaleStep[i] + random(-2, 3);
+      currentArpScaleStep[i] = lastArpScaleStep[i] + random(-2, 3);  // not strictly stepwise, but not totally random jumping
       if (currentArpScaleStep[i] < 0) {
-        currentArpScaleStep[i] = random(1, 2);
+        currentArpScaleStep[i] = random(1, 2);  // out of boounds reset
       } else if (currentArpScaleStep[i] > 11) {
-        currentArpScaleStep[i] = random(8, 11);
+        currentArpScaleStep[i] = random(8, 11);  // out of bounds reset
       }
     }
 
@@ -1561,21 +1589,21 @@ void loop() {
     }
   }
 
-  float arpVoiceFilterCutoff = zoneReading[8] * 1.5;
+  float arpVoiceFilterCutoff = zoneReading[8] * 2.5;
   arpVoiceFilter.SetFreq(arpVoiceFilterCutoff);
 
   if (arpActiveState == true) {
     int arpExponent = 1;
     arpLevel = zoneReading[8] / 1023.0;
     arpLevel = pow(arpLevel, arpExponent);
-    arpLevel = arpLevel / 5.0;
+    arpLevel = arpLevel / 1.0;
   } else {
     arpLevel = 0.0;
   }
 
 
   for (int i = 0; i < NUMCHORDS; i++) {
-    arpVoiceLevelModifier[i] = arpLevel;
+    arpVoiceLevelModifier[i] = arpLevel * 0.5;
   }
 
   if (currentPatch == 3) {
@@ -1586,17 +1614,10 @@ void loop() {
 
 
   if (arpActiveState != lastArpActiveState) {
-    // Serial.println("arpenv");
     for (int i = 0; i < 3; i++) {  // 3 voices no matter what
       arpVoiceGate[i] = !arpVoiceGate;
     }
   }
-
-
-
-
-
-
 
 
 
@@ -1614,12 +1635,12 @@ void loop() {
 
     for (int i = 0; i < NUMCHORDS; i++) {
       lastPixelMappedZoneReading[i] = pixelMappedZoneReading[i];
-      pixelMappedZoneReading[i] = map(pixelZoneReading[i], 0, 900, 0, 30);
-      pixelMappedZoneReading[i] = constrain(pixelMappedZoneReading[i], 0, 29);
+      pixelMappedZoneReading[i] = map(zoneReading[i], 0, 700, 0, 60);
+      pixelMappedZoneReading[i] = constrain(pixelMappedZoneReading[i], 0, 59);
     }
 
     for (int i = 0; i < NUMCHORDS; i++) {
-      if ((chordActive[i] == true && pixelMappedZoneReading[i] != lastPixelMappedZoneReading[i]) || (lastChordActive[i] == false && chordActive[i] == true)) {
+      if ((chordActive[i] == true && pixelMappedZoneReading[i] % 2 == 0) || (lastChordActive[i] == false && chordActive[i] == true)) {  // only update neopixels when there's a (meaningful) change
         for (int j = 0; j < 4; j++) {
           strip.setPixelColor(orderedNeopixel[(i * 4) + j], (colorBase[i][0] * (pixelMappedZoneReading[i] + 1)) * arpRippleModifier[arpActiveState][(arpRippleModIndex + j) % NUMARPRIPPLESTEPS], (colorBase[i][1] * (pixelMappedZoneReading[i] + 1)) * arpRippleModifier[arpActiveState][(arpRippleModIndex + j) % NUMARPRIPPLESTEPS], (colorBase[i][2] * (pixelMappedZoneReading[i] + 1)) * arpRippleModifier[arpActiveState][(arpRippleModIndex + j) % NUMARPRIPPLESTEPS]);
         }
@@ -1637,12 +1658,19 @@ void loop() {
     }
   }
 
+
+
+
+
+
+
+  // MELODY MODE
   if (melodyMode == true) {
 
     int highestZoneReading = 0;
-
     int strongestZone = 0;
 
+    // find the higest zone reading, so that the user can't advance the sequence by playing the wrong note but slightly triggering the correct note
     for (int i = 0; i < NUMZONES; i++) {
       if (zoneReading[i] > highestZoneReading) {
         highestZoneReading = zoneReading[i];
@@ -1674,15 +1702,15 @@ void loop() {
       }
 
       if (melodyNoteAccidentalModifier[song][sequenceStep] == 2) {
-        strip.setPixelColor(35, 210, 210, 210);
-      } else {
-        strip.setPixelColor(35, 0, 0, 0);
-      }
-
-      if (melodyNoteAccidentalModifier[song][sequenceStep] == 1) {
         strip.setPixelColor(34, 210, 210, 210);
       } else {
         strip.setPixelColor(34, 0, 0, 0);
+      }
+
+      if (melodyNoteAccidentalModifier[song][sequenceStep] == 1) {
+        strip.setPixelColor(35, 210, 210, 210);
+      } else {
+        strip.setPixelColor(35, 0, 0, 0);
       }
       strip.show();
       noteSet = true;
@@ -1717,12 +1745,6 @@ void loop() {
 
 
 
-
-
-
-
-
-
   // AUTO ACCOMPANIST
   if (lastAaState == true && aaState == false) {
     for (int i = 0; i < 3; i++) {
@@ -1735,35 +1757,20 @@ void loop() {
 
 
 
-
-
-
-
-
-
-
-
   // IR READ
-  if (pulseCounter == 1 && millis() > lastFirstPulseTime + pulseTimeout) {
-    pulseCounter = 0;
-  }
 
-  if (pulseCounter >= 2) {
-    looperModeCounter = 2;
-    pos = 0;
+  // eventually this will be how multiple units communicate with one another, but I need to write a more reliable protocol
 
-    pulseCounter = 0;
-  }
+  // if (pulseCounter == 1 && millis() > lastFirstPulseTime + pulseTimeout) {
+  //   pulseCounter = 0;
+  // }
 
+  // if (pulseCounter >= 2) {
+  //   looperModeCounter = 2;
+  //   pos = 0;
 
-
-
-
-
-
-
-
-
+  //   pulseCounter = 0;
+  // }
 
 
 
@@ -1773,58 +1780,58 @@ void loop() {
 
 
   // LOOPER
-  lastButtonState = buttonState;
-  buttonState = digitalRead(buttonPin);
-  lastLooperModeCounter = looperModeCounter;
 
-  if (buttonState == LOW) {
-    if (lastButtonState == HIGH) {
-      lastButtonPressTime = millis();
+  if (aaState == false) {  // looper is currently disabled while AA is playing due to processing constraints
+
+    lastButtonState = buttonState;
+    buttonState = digitalRead(buttonPin);
+    lastLooperModeCounter = looperModeCounter;
+
+    if (buttonState == LOW) {
+      if (lastButtonState == HIGH && buttonDisabled == false) {
+        lastButtonPressTime = millis();
+        delay(8);
+        looperModeCounter++;
+        if (looperModeCounter == 2) {
+          first = false;
+          mod = len;
+          len = 0;
+          res = true;
+        }
+        if (looperModeCounter == 1 && firstPress == false) {
+          resetBuffer();
+          res = false;
+        }
+        if (looperModeCounter > 2) {
+          looperModeCounter = 0;
+          firstPress = false;
+          digitalWrite(irTxPin, LOW);
+        }
+      }
+
+      // TO RESET TO BOOTLOADER: pull left joystick up, right joystick down, while holding button for 5 seconds
+      if (millis() > lastButtonPressTime + resetPressDuration && halfStepJoystickReading < HALFSTEPHIGHPOINT && octaveJoystickReading > OCTAVELOWPOINT) {
+        resetToBootLoader();
+      }
+
+    } else if (lastButtonState == LOW && buttonState == HIGH) {
       delay(8);
-      looperModeCounter++;
-      if (looperModeCounter == 2) {
-        first = false;
-        mod = len;
-        len = 0;
-        res = true;
-      }
-      if (looperModeCounter == 1 && firstPress == false) {
-        resetBuffer();
-        res = false;
-      }
-      if (looperModeCounter > 2) {
-        looperModeCounter = 0;
-        firstPress = false;
-        digitalWrite(irTxPin, LOW);
-      }
     }
 
-    if (millis() > lastButtonPressTime + resetPressDuration) {
-      resetToBootLoader();
+    if (looperModeCounter == 0) {
+      looperPassthrough = true;
+      looperRecording = false;
+      looperPlaying = false;
+    } else if (looperModeCounter == 1) {
+      looperPassthrough = false;
+      looperRecording = true;
+      looperPlaying = false;
+    } else if (looperModeCounter == 2) {
+      looperPassthrough = false;
+      looperRecording = false;
+      looperPlaying = true;
     }
-
-  } else if (lastButtonState == LOW && buttonState == HIGH) {
-    delay(8);
   }
-
-  if (looperModeCounter == 0) {
-    looperPassthrough = true;
-    looperRecording = false;
-    looperPlaying = false;
-  } else if (looperModeCounter == 1) {
-    looperPassthrough = false;
-    looperRecording = true;
-    looperPlaying = false;
-  } else if (looperModeCounter == 2) {
-    looperPassthrough = false;
-    looperRecording = false;
-    looperPlaying = true;
-  }
-
-
-
-
-
 
 
 
@@ -1856,13 +1863,6 @@ void loop() {
   }
 }
 // end of main loop
-
-
-
-
-
-
-
 
 
 
@@ -1949,7 +1949,7 @@ void updatePatch() {
   if (currentPatch == 0) {
     //MAIN VOICES
     for (int i = 0; i < NUMMAINVOICES; i++) {
-      mainVoiceOscillator[i]->SetWaveform(mainVoiceOscillator[i]->WAVE_SAW);
+      mainVoiceOscillator[i]->SetWaveform(mainVoiceOscillator[i]->WAVE_POLYBLEP_SAW);
     }
 
 
@@ -1961,10 +1961,9 @@ void updatePatch() {
 
 
     for (int i = 0; i < NUMCHORDS; i++) {
-      mainVoiceFilter[i]->SetRes(0.1);
+      mainVoiceFilter[i]->SetRes(0.2);
       mainVoiceFilter[i]->SetFreq(1500);
     }
-
 
 
     //ARP VOICES
@@ -1990,9 +1989,9 @@ void updatePatch() {
 
 
   // SMOOTH
-  if (currentPatch == 4) {
+  if (currentPatch == 1) {
     for (int i = 0; i < NUMMAINVOICES; i++) {
-      mainVoiceOscillator[i]->SetWaveform(mainVoiceOscillator[i]->WAVE_TRI);
+      mainVoiceOscillator[i]->SetWaveform(mainVoiceOscillator[i]->WAVE_SIN);
     }
 
     for (int i = 0; i < 33; i++) {
@@ -2141,8 +2140,6 @@ void readIR() {
     lastFirstPulseTime = millis();
   }
 }
-
-
 
 
 
@@ -2300,7 +2297,7 @@ void generateAutoAccompanyment() {
     aaChord[i] = random(0, 7);
   }
 
-  // generate note hold durations
+  // generate note hold durations (currently not implemented)
   int noteHoldSteps[3][aaNumChords];
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < aaNumChords; j++) {
@@ -2321,7 +2318,7 @@ void generateAutoAccompanyment() {
     }
   }
 
-  // generate next voice sequence
+  // generate middle voice sequence
   currentChordNumber = 0;
   for (int i = 0; i < 64; i++) {
     if (i == aaChordEventStep[currentChordNumber]) {
@@ -2335,7 +2332,7 @@ void generateAutoAccompanyment() {
   }
 
 
-  // generate next voice sequence
+  // generate upper voice sequence
   currentChordNumber = 0;
   for (int i = 0; i < 64; i++) {
     if (i == aaChordEventStep[currentChordNumber]) {  // note on
@@ -2351,4 +2348,22 @@ void generateAutoAccompanyment() {
 
   aaState = true;
   currentAaSequenceStep = 0;
+}
+
+
+
+
+// Input a value 0 to 255 to get a color value.
+// The colours are a transition r - g - b - back to r.
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if (WheelPos < 85) {
+    return strip.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if (WheelPos < 170) {
+    WheelPos -= 85;
+    return strip.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return strip.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
